@@ -4,16 +4,23 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { JSDOM } from "jsdom";
-import { NodeHtmlMarkdown } from "node-html-markdown";
 import {
   DocsDatabase,
   type DocMeta,
   type DocRow,
   type SearchResult,
-  type DocsetInfo,
-  type DocsetVersionInfo,
 } from "./db/docs-db.js";
+import { PageCache } from "./cache.js";
+import { PageFetcher, type FetchStrategy } from "./fetch-strategy.js";
+import {
+  formatSearchResults,
+  formatPageList,
+  formatSections,
+  formatPageHeader,
+  formatDocsets,
+  formatVersions,
+  formatStats,
+} from "./formatter.js";
 
 const DEFAULT_SEARCH_LIMIT = 10;
 const MAX_SEARCH_LIMIT = 50;
@@ -26,9 +33,9 @@ const MAX_COMPLETE_RESULTS = 25;
 const DEFAULT_DOCSET = process.env.RUNAI_DOCS_DOCSET ?? "self-hosted";
 const DEFAULT_VERSION = process.env.RUNAI_DOCS_VERSION ?? "latest";
 const DEFAULT_FALLBACK_VERSION = process.env.RUNAI_DOCS_LATEST_VERSION ?? "2.24";
+const FETCH_STRATEGY = (process.env.RUNAI_DOCS_FETCH_STRATEGY ?? "cache-first") as FetchStrategy;
 const LIVE_LOOKUP_ENABLED = (process.env.RUNAI_DOCS_LIVE_LOOKUP ?? "1") !== "0";
 const LIVE_LOOKUP_TIMEOUT_MS = Number(process.env.RUNAI_DOCS_LIVE_TIMEOUT_MS ?? "12000");
-const LIVE_LOOKUP_ALLOWED_HOSTS = new Set(["run-ai-docs.nvidia.com", "docs.run.ai"]);
 
 const PageRefSchema = z.object({
   docset: z.string(),
@@ -312,190 +319,7 @@ function toolError(message: string): CallToolResult {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
-function uniqueStrings(values: string[]): string[] {
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    if (seen.has(value)) return false;
-    seen.add(value);
-    return true;
-  });
-}
-
-function buildUrlCandidates(url: string, context: { docset?: string; version?: string }): string[] {
-  const candidates = [url];
-  if (context.version) {
-    if (context.docset === "self-hosted") {
-      const withVersion = url.replace("/self-hosted/", `/self-hosted/${context.version}/`);
-      const withoutVersion = url.replace(`/self-hosted/${context.version}/`, "/self-hosted/");
-      candidates.push(withVersion, withoutVersion);
-    }
-    if (context.docset === "api") {
-      const withVersion = url.replace("/api/2.24/", `/api/${context.version}/`);
-      const withoutVersion = url.replace(`/api/${context.version}/`, "/api/2.24/");
-      candidates.push(withVersion, withoutVersion);
-    }
-    if (context.docset === "multi-tenant") {
-      const withVersion = url.replace("/multi-tenant/", `/multi-tenant/${context.version}/`);
-      const withoutVersion = url.replace(`/multi-tenant/${context.version}/`, "/multi-tenant/");
-      candidates.push(withVersion, withoutVersion);
-    }
-  }
-  return uniqueStrings(candidates);
-}
-
-function titleFromUrl(url: string): string {
-  try {
-    const pathname = new URL(url).pathname;
-    const slug = pathname.split("/").filter(Boolean).at(-1) ?? "page";
-    return slug
-      .replace(/[-_]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .replace(/\b\w/g, (char) => char.toUpperCase());
-  } catch {
-    return url;
-  }
-}
-
-function stripMarkdown(md: string): string {
-  return md
-    .replace(/```[\s\S]*?```/g, (match) => match)
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/[#*_~`]/g, "")
-    .replace(/\n{3,}/g, "\n\n");
-}
-
-function inferCategoryFromUrl(url: string, docset?: string): { category: string; subcategory: string } {
-  try {
-    const pathParts = new URL(url).pathname.split("/").filter(Boolean);
-    if (docset === "self-hosted") {
-      const idx = pathParts[0] === "self-hosted" ? 1 : 0;
-      const afterVersion = /^\d+\.\d+$/.test(pathParts[idx] ?? "") ? pathParts.slice(idx + 1) : pathParts.slice(idx);
-      const first = afterVersion[0] ?? "general";
-      if (first === "getting-started") return { category: "installation", subcategory: afterVersion[1] ?? "general" };
-      if (first === "infrastructure-setup")
-        return { category: "infrastructure", subcategory: afterVersion[1] ?? "general" };
-      if (first === "platform-management") return { category: "platform", subcategory: afterVersion[1] ?? "general" };
-      if (first === "workloads-in-nvidia-run-ai" || first === "ai-applications")
-        return { category: "workloads", subcategory: afterVersion[1] ?? "general" };
-      if (first === "reference" && afterVersion[1] === "cli") return { category: "cli", subcategory: "overview" };
-      return { category: "self-hosted", subcategory: first };
-    }
-    if (docset === "api") {
-      const idx = pathParts[0] === "api" ? 1 : 0;
-      const afterVersion = /^\d+\.\d+$/.test(pathParts[idx] ?? "") ? pathParts.slice(idx + 1) : pathParts.slice(idx);
-      return { category: "api", subcategory: afterVersion[0] ?? "general" };
-    }
-    if (docset === "saas") {
-      return { category: "saas", subcategory: pathParts[1] ?? "general" };
-    }
-    if (docset === "multi-tenant") {
-      const idx = pathParts[0] === "multi-tenant" ? 1 : 0;
-      const afterVersion = /^\d+\.\d+$/.test(pathParts[idx] ?? "") ? pathParts.slice(idx + 1) : pathParts.slice(idx);
-      return { category: "multi-tenant", subcategory: afterVersion[0] ?? "general" };
-    }
-    return { category: pathParts[0] ?? "live", subcategory: pathParts[1] ?? "general" };
-  } catch {
-    return { category: "live", subcategory: docset ?? "general" };
-  }
-}
-
-async function fetchLivePage(url: string, context: { docset?: string; version?: string }): Promise<DocRow | null> {
-  if (!LIVE_LOOKUP_ENABLED) {
-    return null;
-  }
-
-  for (const candidate of buildUrlCandidates(url, context)) {
-    let parsed: URL;
-    try {
-      parsed = new URL(candidate);
-    } catch {
-      continue;
-    }
-    if (!LIVE_LOOKUP_ALLOWED_HOSTS.has(parsed.hostname)) {
-      continue;
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), LIVE_LOOKUP_TIMEOUT_MS);
-    try {
-      const resp = await fetch(candidate, {
-        headers: {
-          "User-Agent": "RunAI-MCP-LiveLookup/1.0",
-          Accept: "text/html",
-        },
-        signal: controller.signal,
-      });
-      if (!resp.ok) {
-        continue;
-      }
-
-      const html = await resp.text();
-      const dom = new JSDOM(html);
-      const doc = dom.window.document;
-      const main =
-        doc.querySelector("main") ||
-        doc.querySelector('[role="main"]') ||
-        doc.querySelector(".gitbook-root") ||
-        doc.querySelector("article") ||
-        doc.body;
-
-      for (const selector of ["nav", "header", "footer", '[role="navigation"]', ".sidebar"]) {
-        main.querySelectorAll(selector).forEach((el) => el.remove());
-      }
-
-      const md = new NodeHtmlMarkdown().translate(main.innerHTML);
-      const plain = stripMarkdown(md);
-      const title = doc.querySelector("h1")?.textContent?.trim() || doc.title?.trim() || titleFromUrl(candidate);
-      const { category, subcategory } = inferCategoryFromUrl(candidate, context.docset);
-      return {
-        url: candidate,
-        category,
-        subcategory,
-        title,
-        content_md: md,
-        content_plain: plain,
-        fetched_at: new Date().toISOString(),
-        docset: context.docset,
-        version: context.version,
-      };
-    } catch {
-      continue;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  return null;
-}
-
-function getPageFromCacheWithUrlFallback(
-  db: DocsDatabase,
-  url: string,
-  context: { docset?: string; version?: string }
-): DocRow | null {
-  for (const candidate of buildUrlCandidates(url, context)) {
-    const page = db.getPage(candidate, context);
-    if (page) {
-      return page;
-    }
-  }
-  return null;
-}
-
-async function getPageWithUrlFallback(
-  db: DocsDatabase,
-  url: string,
-  context: { docset?: string; version?: string }
-): Promise<DocRow | null> {
-  const cached = getPageFromCacheWithUrlFallback(db, url, context);
-  if (cached) {
-    return cached;
-  }
-  return fetchLivePage(url, context);
-}
-
-function registerResources(server: McpServer, db: DocsDatabase) {
+function registerResources(server: McpServer, db: DocsDatabase, fetcher: PageFetcher) {
   const template = new ResourceTemplate("runai-docs://{docset}/{version}/page/{url}", {
     list: () => {
       const pages = db.listAllPages();
@@ -556,7 +380,7 @@ function registerResources(server: McpServer, db: DocsDatabase) {
       if (!context.docset || !context.version) {
         throw new McpError(ErrorCode.InvalidParams, "Missing docset or version for resource lookup");
       }
-      const page = getPageFromCacheWithUrlFallback(db, decoded, { docset: context.docset, version: context.version });
+      const page = fetcher.getPageFromDb(decoded, { docset: context.docset, version: context.version });
       if (!page) {
         throw new McpError(
           ErrorCode.InvalidParams,
@@ -585,7 +409,7 @@ function registerResources(server: McpServer, db: DocsDatabase) {
   );
 }
 
-function registerTools(server: McpServer, db: DocsDatabase) {
+function registerTools(server: McpServer, db: DocsDatabase, fetcher: PageFetcher) {
   server.registerTool(
     "search_docs",
     {
@@ -626,9 +450,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const content = [
         {
           type: "text" as const,
-          text: `Found ${results.length} result(s) for \"${query}\" in ${
-            context.docset ?? "all docsets"
-          }/${context.version ?? "all versions"} (limit ${limit}, offset ${offset}).`,
+          text: formatSearchResults(results, query, context),
         },
         ...results.map((result) => toResourceLink(result, context)),
       ];
@@ -676,7 +498,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       }
 
       if (url) {
-        const page = await getPageWithUrlFallback(db, url, { docset: context.docset, version: context.version });
+        const page = await fetcher.getPage(url, { docset: context.docset, version: context.version });
         if (!page) {
           return {
             content: [{ type: "text", text: `Page not found for URL: ${url}` }],
@@ -690,7 +512,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         const pageResult = pageWithContent(page, include_content, max_chars, context);
         return {
           content: [
-            { type: "text", text: `Found page: ${page.title}` },
+            { type: "text", text: formatPageHeader(page, context) },
             toResourceLink(page, context),
           ],
           structuredContent: {
@@ -731,7 +553,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         };
       }
 
-      const page = await getPageWithUrlFallback(db, matches[0].url, { docset: context.docset, version: context.version });
+      const page = await fetcher.getPage(matches[0].url, { docset: context.docset, version: context.version });
       if (!page) {
         return {
           content: [{ type: "text", text: `Page not found for title match: ${title}` }],
@@ -746,7 +568,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const pageResult = pageWithContent(page, include_content, max_chars, context);
       return {
         content: [
-          { type: "text", text: `Found page: ${page.title}` },
+          { type: "text", text: formatPageHeader(page, context) },
           toResourceLink(page, context),
         ],
         structuredContent: {
@@ -774,24 +596,23 @@ function registerTools(server: McpServer, db: DocsDatabase) {
     async ({ docset, version }) => {
       const context = resolveContext(db, { docset, version });
       const sections = db.listCategories({ docset: context.docset, version: context.version });
+      const sectionData = sections.map((section) => ({
+        docset: section.docset ?? context.docset ?? DEFAULT_DOCSET,
+        version: section.version ?? context.version ?? DEFAULT_FALLBACK_VERSION,
+        category: section.category,
+        subcategory: section.subcategory,
+        count: section.count,
+      }));
       return {
         content: [
           {
             type: "text",
-            text: `Run:ai documentation sections (${sections.length}) for ${
-              context.docset ?? "all docsets"
-            }/${context.version ?? "all versions"}.`,
+            text: formatSections(sectionData),
           },
         ],
         structuredContent: {
           total_sections: sections.length,
-          sections: sections.map((section) => ({
-            docset: section.docset ?? context.docset ?? DEFAULT_DOCSET,
-            version: section.version ?? context.version ?? DEFAULT_FALLBACK_VERSION,
-            category: section.category,
-            subcategory: section.subcategory,
-            count: section.count,
-          })),
+          sections: sectionData,
         },
       };
     }
@@ -831,9 +652,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         content: [
           {
             type: "text",
-            text: `Pages in ${category}${subcategory ? `/${subcategory}` : ""} for ${
-              context.docset ?? "all docsets"
-            }/${context.version ?? "all versions"}: ${pages.length} of ${total}.`,
+            text: formatPageList(pages, context),
           },
           ...pages.map((page) => toResourceLink(page, context)),
         ],
@@ -874,7 +693,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         content: [
           {
             type: "text",
-            text: `Available docsets: ${docsets.length}.`,
+            text: formatDocsets(docsets),
           },
         ],
         structuredContent: {
@@ -906,22 +725,23 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         normalizedDocset = undefined;
       }
       const versions = db.listVersions(normalizedDocset);
+      const versionData = versions.map((version) => ({
+        docset: version.docset,
+        version: version.version,
+        is_latest: Boolean(version.is_latest),
+        release_date: version.release_date,
+        source: version.source,
+      }));
       return {
         content: [
           {
             type: "text",
-            text: `Available versions${normalizedDocset ? ` for ${normalizedDocset}` : ""}: ${versions.length}.`,
+            text: formatVersions(versionData, normalizedDocset),
           },
         ],
         structuredContent: {
           docset: normalizedDocset,
-          versions: versions.map((version) => ({
-            docset: version.docset,
-            version: version.version,
-            is_latest: Boolean(version.is_latest),
-            release_date: version.release_date,
-            source: version.source,
-          })),
+          versions: versionData,
         },
       };
     }
@@ -943,21 +763,20 @@ function registerTools(server: McpServer, db: DocsDatabase) {
     async ({ docset, version }) => {
       const context = resolveContext(db, { docset, version });
       const stats = db.getStats({ docset: context.docset, version: context.version });
+      const statsData = {
+        docset: context.docset ?? "all",
+        version: context.version ?? "all",
+        pages: stats.pages,
+        last_fetched_at: stats.lastFetchedAt,
+      };
       return {
         content: [
           {
             type: "text",
-            text: `Docs database contains ${stats.pages} page(s) for ${
-              context.docset ?? "all docsets"
-            }/${context.version ?? "all versions"}. Last fetched at: ${stats.lastFetchedAt ?? "unknown"}.`,
+            text: formatStats(statsData),
           },
         ],
-        structuredContent: {
-          docset: context.docset ?? "all",
-          version: context.version ?? "all",
-          pages: stats.pages,
-          last_fetched_at: stats.lastFetchedAt,
-        },
+        structuredContent: statsData,
       };
     }
   );
@@ -994,7 +813,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         upgrade: `${base}/getting-started/installation/install-using-helm/upgrade`,
         uninstall: `${base}/getting-started/installation/install-using-helm/uninstall`,
       };
-      const page = await getPageWithUrlFallback(db, urlMap[component], context);
+      const page = await fetcher.getPage(urlMap[component], context);
       if (!page) {
         return {
           content: [{ type: "text", text: `Page not found for component: ${component}. Run npm run scrape.` }],
@@ -1008,7 +827,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const pageResult = pageWithContent(page, include_content, max_chars, context);
       return {
         content: [
-          { type: "text", text: `Helm ${component} guide found.` },
+          { type: "text", text: formatPageHeader(page, context) },
           toResourceLink(page, context),
         ],
         structuredContent: {
@@ -1080,7 +899,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         "org-unit": "authentication-and-authorization/org-unit",
       };
       const url = `https://run-ai-docs.nvidia.com/api/${context.version}/${categoryMap[endpoint]}`;
-      const page = await getPageWithUrlFallback(db, url, context);
+      const page = await fetcher.getPage(url, context);
       if (!page) {
         return {
           content: [{ type: "text", text: `API reference for ${endpoint} not found. Run npm run scrape.` }],
@@ -1094,7 +913,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const pageResult = pageWithContent(page, include_content, max_chars, context);
       return {
         content: [
-          { type: "text", text: `API reference for ${endpoint} found.` },
+          { type: "text", text: formatPageHeader(page, context) },
           toResourceLink(page, context),
         ],
         structuredContent: {
@@ -1137,7 +956,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         "cluster-requirements": `${base}/getting-started/installation/install-using-helm/system-requirements`,
         network: `${base}/getting-started/installation/install-using-helm/network-requirements`,
       };
-      const page = await getPageWithUrlFallback(db, urlMap[component], context);
+      const page = await fetcher.getPage(urlMap[component], context);
       if (!page) {
         return {
           content: [{ type: "text", text: `Requirements page not found. Run npm run scrape.` }],
@@ -1151,7 +970,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const pageResult = pageWithContent(page, include_content, max_chars, context);
       return {
         content: [
-          { type: "text", text: `Requirements page found for ${component}.` },
+          { type: "text", text: formatPageHeader(page, context) },
           toResourceLink(page, context),
         ],
         structuredContent: {
@@ -1192,7 +1011,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         "service-accounts": `${base}/infrastructure-setup/authentication/service-accounts`,
         "cluster-auth": `${base}/infrastructure-setup/authentication/cluster-authentication`,
       };
-      const page = await getPageWithUrlFallback(db, urlMap[topic], context);
+      const page = await fetcher.getPage(urlMap[topic], context);
       if (!page) {
         return {
           content: [{ type: "text", text: `RBAC topic not found. Run npm run scrape.` }],
@@ -1206,7 +1025,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const pageResult = pageWithContent(page, include_content, max_chars, context);
       return {
         content: [
-          { type: "text", text: `RBAC topic ${topic} found.` },
+          { type: "text", text: formatPageHeader(page, context) },
           toResourceLink(page, context),
         ],
         structuredContent: {
@@ -1296,7 +1115,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         "data-volumes": `${base}/workloads-in-nvidia-run-ai/assets/data-volumes`,
         "ai-applications": `${base}/ai-applications/ai-applications`,
       };
-      const page = await getPageWithUrlFallback(db, urlMap[topic], context);
+      const page = await fetcher.getPage(urlMap[topic], context);
       if (!page) {
         return {
           content: [{ type: "text", text: `Workload topic not found. Run npm run scrape.` }],
@@ -1310,7 +1129,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const pageResult = pageWithContent(page, include_content, max_chars, context);
       return {
         content: [
-          { type: "text", text: `Workload topic ${topic} found.` },
+          { type: "text", text: formatPageHeader(page, context) },
           toResourceLink(page, context),
         ],
         structuredContent: {
@@ -1371,7 +1190,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         "dynamic-fractions-quickstart":
           `${base}/platform-management/runai-scheduler/resource-optimization/quick-starts/dynamic-gpu-fractions-quickstart`,
       };
-      const page = await getPageWithUrlFallback(db, urlMap[topic], context);
+      const page = await fetcher.getPage(urlMap[topic], context);
       if (!page) {
         return {
           content: [{ type: "text", text: `Scheduler topic not found. Run npm run scrape.` }],
@@ -1385,7 +1204,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const pageResult = pageWithContent(page, include_content, max_chars, context);
       return {
         content: [
-          { type: "text", text: `Scheduler topic ${topic} found.` },
+          { type: "text", text: formatPageHeader(page, context) },
           toResourceLink(page, context),
         ],
         structuredContent: {
@@ -1488,7 +1307,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         upgrade: `${base}/reference/cli/runai/runai_upgrade`,
         report: `${base}/reference/cli/runai/runai_report`,
       };
-      const page = await getPageWithUrlFallback(db, urlMap[command], context);
+      const page = await fetcher.getPage(urlMap[command], context);
       if (!page) {
         return {
           content: [{ type: "text", text: `CLI command not found. Run npm run scrape.` }],
@@ -1502,7 +1321,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const pageResult = pageWithContent(page, include_content, max_chars, context);
       return {
         content: [
-          { type: "text", text: `CLI reference for ${command} found.` },
+          { type: "text", text: formatPageHeader(page, context) },
           toResourceLink(page, context),
         ],
         structuredContent: {
@@ -1552,7 +1371,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
         "policy-yaml-reference": `${base}/platform-management/policies/policy-yaml-reference`,
         "policy-yaml-examples": `${base}/platform-management/policies/policy-yaml-examples`,
       };
-      const page = await getPageWithUrlFallback(db, urlMap[topic], context);
+      const page = await fetcher.getPage(urlMap[topic], context);
       if (!page) {
         return {
           content: [{ type: "text", text: `Policy topic not found. Run npm run scrape.` }],
@@ -1566,7 +1385,7 @@ function registerTools(server: McpServer, db: DocsDatabase) {
       const pageResult = pageWithContent(page, include_content, max_chars, context);
       return {
         content: [
-          { type: "text", text: `Policy topic ${topic} found.` },
+          { type: "text", text: formatPageHeader(page, context) },
           toResourceLink(page, context),
         ],
         structuredContent: {
@@ -1588,14 +1407,23 @@ async function main() {
     process.exit(1);
   }
 
+  const cache = new PageCache();
+  const fetcher = new PageFetcher({
+    db,
+    cache,
+    strategy: FETCH_STRATEGY,
+    timeoutMs: LIVE_LOOKUP_TIMEOUT_MS,
+    liveLookupEnabled: LIVE_LOOKUP_ENABLED,
+  });
+
   const server = new McpServer({
     name: "runai-docs",
     version: "0.2.0",
     description: "Run:ai multi-version documentation and API reference MCP server",
   });
 
-  registerResources(server, db);
-  registerTools(server, db);
+  registerResources(server, db, fetcher);
+  registerTools(server, db, fetcher);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
