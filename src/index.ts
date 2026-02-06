@@ -320,28 +320,12 @@ function toolError(message: string): CallToolResult {
 }
 
 function registerResources(server: McpServer, db: DocsDatabase, fetcher: PageFetcher) {
+  // NOTE: We intentionally don't enumerate all pages as resources.
+  // Listing ~1000 doc pages as MCP resources causes performance issues and
+  // goes against MCP design principles. Use search_docs/list_pages tools instead.
+  // The template is kept so resource URIs in tool responses remain valid.
   const template = new ResourceTemplate("runai-docs://{docset}/{version}/page/{url}", {
-    list: () => {
-      const pages = db.listAllPages();
-      return {
-        resources: pages.map((page) => ({
-          uri: toResourceUri(page.docset ?? DEFAULT_DOCSET, page.version ?? DEFAULT_FALLBACK_VERSION, page.url),
-          name: page.title,
-          title: page.title,
-          description: `${page.docset ?? DEFAULT_DOCSET}/${page.version ?? DEFAULT_FALLBACK_VERSION} - ${page.category}/${page.subcategory}`,
-          mimeType: "text/markdown",
-          annotations: page.fetched_at ? { lastModified: page.fetched_at } : undefined,
-          _meta: {
-            url: page.url,
-            category: page.category,
-            subcategory: page.subcategory,
-            fetched_at: page.fetched_at,
-            docset: page.docset ?? DEFAULT_DOCSET,
-            version: page.version ?? DEFAULT_FALLBACK_VERSION,
-          },
-        })),
-      };
-    },
+    list: undefined,
     complete: {
       url: (value) => {
         if (!value) {
