@@ -225,7 +225,6 @@ export class PageFetcher {
     }
   }
 
-  /** DB -> in-memory cache -> live fetch (current default behavior) */
   private async cacheFirst(url: string, context: { docset?: string; version?: string }): Promise<DocRow | null> {
     const dbPage = getPageFromDbWithUrlFallback(this.db, url, context);
     if (dbPage) return dbPage;
@@ -243,7 +242,6 @@ export class PageFetcher {
     return live;
   }
 
-  /** in-memory cache -> live fetch -> DB fallback */
   private async liveFirst(url: string, context: { docset?: string; version?: string }): Promise<DocRow | null> {
     const memKey = PageCache.key(context.docset, context.version, url);
     const cached = this.cache.get(memKey);
@@ -258,7 +256,6 @@ export class PageFetcher {
     return getPageFromDbWithUrlFallback(this.db, url, context);
   }
 
-  /** DB -> in-memory cache only, no network */
   private async cacheOnly(url: string, context: { docset?: string; version?: string }): Promise<DocRow | null> {
     const dbPage = getPageFromDbWithUrlFallback(this.db, url, context);
     if (dbPage) return dbPage;
@@ -267,7 +264,6 @@ export class PageFetcher {
     return this.cache.get(memKey);
   }
 
-  /** Sync DB-only lookup (used by resource handler which cannot be async) */
   getPageFromDb(url: string, context: { docset?: string; version?: string }): DocRow | null {
     return getPageFromDbWithUrlFallback(this.db, url, context);
   }

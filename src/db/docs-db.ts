@@ -75,8 +75,6 @@ function resolveDbPath(explicit?: string): { path: string; source: string } {
     candidates.push({ path: normalizePath(explicit), source: "RUNAI_DOCS_DB" });
   }
 
-  // Prefer src/data/ (development) over dist/data/ (release/npm).
-  // For npm packages where only dist/ exists, src/data/ won't be found and dist/data/ is used.
   const repoSrcPath = path.resolve(MODULE_DIR, "..", "..", "src", "data", DEFAULT_DB_FILENAME);
   const distOrSrcDataPath = path.resolve(MODULE_DIR, "..", "data", DEFAULT_DB_FILENAME);
 
@@ -187,18 +185,12 @@ export class DocsDatabase {
     return rows.map((row) => this.withDefaults(row));
   }
 
-  /**
-   * Sanitize a user query for FTS5 MATCH.
-   * Wraps tokens containing special characters (dots, hyphens, etc.) in double quotes
-   * so FTS5 treats them as literal phrases rather than operator syntax.
-   */
   private sanitizeFts5Query(query: string): string {
     const trimmed = query.trim();
     if (!trimmed) {
       return trimmed;
     }
 
-    // If the user already wrapped the whole query in quotes, pass through
     if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
       return trimmed;
     }

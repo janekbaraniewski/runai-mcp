@@ -1,6 +1,6 @@
 import type { DocRow } from "./db/docs-db.js";
 
-const DEFAULT_TTL_MS = 900_000; // 15 minutes
+const DEFAULT_TTL_MS = 900_000;
 
 interface CacheEntry {
   page: DocRow;
