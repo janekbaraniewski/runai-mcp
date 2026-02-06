@@ -80,8 +80,6 @@ export function buildDocEntries(): {
           ...page,
           docset: "self-hosted",
           version,
-          // Keep canonical self-hosted URL as-is. Some installations expose
-          // unversioned paths, and runtime tools now handle both forms.
           url: page.url,
         });
       }

@@ -1,9 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * Scraper for Run:ai documentation.
- * Fetches configured pages, discovers internal docs links, and stores content in SQLite.
- */
-
 import { JSDOM } from "jsdom";
 import { NodeHtmlMarkdown } from "node-html-markdown";
 import Database from "better-sqlite3";

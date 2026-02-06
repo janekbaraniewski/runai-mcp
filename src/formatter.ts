@@ -1,4 +1,4 @@
-import type { DocRow, DocMeta, SearchResult, DocsetInfo, DocsetVersionInfo } from "./db/docs-db.js";
+import type { DocRow, DocMeta, SearchResult } from "./db/docs-db.js";
 
 export function formatTable(
   headers: string[],

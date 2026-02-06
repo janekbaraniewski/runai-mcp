@@ -1,9 +1,4 @@
 #!/usr/bin/env tsx
-/**
- * URL verification script for Run:ai documentation.
- * HEAD-requests all configured URLs across docsets/versions and reports failures.
- */
-
 import { buildDocEntries, type DocEntry } from "./docsets.js";
 
 const CONCURRENCY = 10;
@@ -32,7 +27,6 @@ async function main() {
     const batchResults = await Promise.all(batch.map(checkUrl));
     results.push(...batchResults);
 
-    // Progress indicator
     const done = Math.min(i + CONCURRENCY, entries.length);
     process.stderr.write(`\r  ${done}/${entries.length} checked`);
   }

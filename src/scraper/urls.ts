@@ -1,9 +1,3 @@
-/**
- * Base Run:ai v2.24 documentation URLs organized by category.
- * These are used as seed URLs for multi-version scraping. Version-specific
- * URLs are derived in the scraper by rewriting self-hosted and API paths.
- */
-
 const BASE = "https://run-ai-docs.nvidia.com";
 export const VERSION_TOKEN = "__VERSION__";
 
@@ -326,8 +320,6 @@ export const SAAS_PAGES: DocPage[] = [
   { url: `${BASE}/saas/getting-started/installation`, category: "getting-started", subcategory: "installation", title: "Installation" },
   { url: `${BASE}/saas/support-policy/product-support-policy`, category: "support-policy", subcategory: "overview", title: "Product Support Policy" },
   { url: `${BASE}/saas/support-policy/product-version-life-cycle`, category: "support-policy", subcategory: "versions", title: "Product Version Life Cycle" },
-  { url: `${BASE}/saas/reference/api`, category: "reference", subcategory: "api", title: "API Reference" },
-  { url: `${BASE}/saas/reference/api/rest-api`, category: "reference", subcategory: "api", title: "NVIDIA Run:ai REST API" },
 ];
 
 // ---------------------------------------------------------------------------
