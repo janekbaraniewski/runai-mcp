@@ -1,14 +1,14 @@
 #!/usr/bin/env tsx
 /**
  * URL verification script for Run:ai documentation.
- * HEAD-requests all URLs in ALL_PAGES and reports failures.
+ * HEAD-requests all configured URLs across docsets/versions and reports failures.
  */
 
-import { ALL_PAGES, type DocPage } from "./urls.js";
+import { buildDocEntries, type DocEntry } from "./docsets.js";
 
 const CONCURRENCY = 10;
 
-async function checkUrl(page: DocPage): Promise<{ page: DocPage; status: number; ok: boolean }> {
+async function checkUrl(page: DocEntry): Promise<{ page: DocEntry; status: number; ok: boolean }> {
   try {
     const resp = await fetch(page.url, {
       method: "HEAD",
@@ -22,18 +22,19 @@ async function checkUrl(page: DocPage): Promise<{ page: DocPage; status: number;
 }
 
 async function main() {
-  console.log(`Verifying ${ALL_PAGES.length} URLs...\n`);
+  const { entries } = buildDocEntries();
+  console.log(`Verifying ${entries.length} URLs...\n`);
 
-  const results: { page: DocPage; status: number; ok: boolean }[] = [];
+  const results: { page: DocEntry; status: number; ok: boolean }[] = [];
 
-  for (let i = 0; i < ALL_PAGES.length; i += CONCURRENCY) {
-    const batch = ALL_PAGES.slice(i, i + CONCURRENCY);
+  for (let i = 0; i < entries.length; i += CONCURRENCY) {
+    const batch = entries.slice(i, i + CONCURRENCY);
     const batchResults = await Promise.all(batch.map(checkUrl));
     results.push(...batchResults);
 
     // Progress indicator
-    const done = Math.min(i + CONCURRENCY, ALL_PAGES.length);
-    process.stderr.write(`\r  ${done}/${ALL_PAGES.length} checked`);
+    const done = Math.min(i + CONCURRENCY, entries.length);
+    process.stderr.write(`\r  ${done}/${entries.length} checked`);
   }
 
   console.log("\n");
@@ -44,13 +45,15 @@ async function main() {
   if (failures.length > 0) {
     console.log(`FAILURES (${failures.length}):`);
     for (const f of failures) {
-      console.log(`  ${f.status} ${f.page.url} [${f.page.category}/${f.page.subcategory}] "${f.page.title}"`);
+      console.log(
+        `  ${f.status} ${f.page.url} [${f.page.docset} ${f.page.version} ${f.page.category}/${f.page.subcategory}] "${f.page.title}"`
+      );
     }
     console.log();
   }
 
-  console.log(`OK: ${successes.length}/${ALL_PAGES.length}`);
-  console.log(`FAIL: ${failures.length}/${ALL_PAGES.length}`);
+  console.log(`OK: ${successes.length}/${entries.length}`);
+  console.log(`FAIL: ${failures.length}/${entries.length}`);
 
   if (failures.length > 0) {
     process.exit(1);

@@ -1,9 +1,13 @@
 {
   "name": "runai-mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server exposing NVIDIA Run:ai v2.24 documentation and API knowledge",
   "type": "module",
   "main": "dist/index.js",
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
   "bin": {
     "runai-mcp-server": "dist/index.js"
   },
@@ -13,6 +17,8 @@
     "dev": "tsx src/index.ts",
     "scrape": "tsx src/scraper/scrape.ts",
     "verify-urls": "tsx src/scraper/verify-urls.ts",
+    "stage-db": "node scripts/stage-db.mjs",
+    "release:prepare": "npm run scrape && npm run build && npm run stage-db",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "npm run typecheck",
     "pack:check": "npm pack --dry-run",

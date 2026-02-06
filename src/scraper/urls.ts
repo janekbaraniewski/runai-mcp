@@ -1,9 +1,11 @@
 /**
- * All Run:ai v2.24 documentation URLs organized by category.
- * Focused on self-hosted deployment, management APIs, and Kubernetes resources.
+ * Base Run:ai v2.24 documentation URLs organized by category.
+ * These are used as seed URLs for multi-version scraping. Version-specific
+ * URLs are derived in the scraper by rewriting self-hosted and API paths.
  */
 
 const BASE = "https://run-ai-docs.nvidia.com";
+export const VERSION_TOKEN = "__VERSION__";
 
 export interface DocPage {
   url: string;
@@ -129,6 +131,38 @@ export const MANAGEMENT_APIS: DocPage[] = [
   { url: `${BASE}/api/2.24/authentication-and-authorization/tokens`, category: "api", subcategory: "auth", title: "Tokens API" },
   { url: `${BASE}/api/2.24/authentication-and-authorization/idps`, category: "api", subcategory: "auth", title: "Identity Providers API" },
   { url: `${BASE}/api/2.24/authentication-and-authorization/org-unit`, category: "api", subcategory: "auth", title: "Org Unit API" },
+
+  // Additional management/control plane APIs
+  { url: `${BASE}/api/2.24/authentication-and-authorization/settings`, category: "api", subcategory: "auth", title: "Settings API" },
+  { url: `${BASE}/api/2.24/authentication-and-authorization/user-applications`, category: "api", subcategory: "auth", title: "User Applications API" },
+  { url: `${BASE}/api/2.24/authentication-and-authorization/me`, category: "api", subcategory: "auth", title: "Me API" },
+  { url: `${BASE}/api/2.24/getting-started/nvidia-run-ai-api-policy`, category: "api", subcategory: "getting-started", title: "API Policy" },
+  { url: `${BASE}/api/2.24/organizations/network-topologies`, category: "api", subcategory: "organizations", title: "Network Topologies API" },
+  { url: `${BASE}/api/2.24/organizations/reports`, category: "api", subcategory: "organizations", title: "Reports API" },
+  { url: `${BASE}/api/2.24/organizations/logo`, category: "api", subcategory: "organizations", title: "Logo API" },
+  { url: `${BASE}/api/2.24/audit/auditlogs`, category: "api", subcategory: "audit", title: "Audit Logs API" },
+
+  // Workload and CRD-related APIs
+  { url: `${BASE}/api/2.24/workloads/workload-properties`, category: "api", subcategory: "workloads", title: "Workload Properties API" },
+  { url: `${BASE}/api/2.24/workloads/workloads`, category: "api", subcategory: "workloads", title: "Workloads API" },
+  { url: `${BASE}/api/2.24/workloads/workloads-v2`, category: "api", subcategory: "workloads", title: "Workloads V2 API" },
+  { url: `${BASE}/api/2.24/workloads/workspaces`, category: "api", subcategory: "workloads", title: "Workspaces API" },
+  { url: `${BASE}/api/2.24/workloads/trainings`, category: "api", subcategory: "workloads", title: "Trainings API" },
+  { url: `${BASE}/api/2.24/workloads/inferences`, category: "api", subcategory: "workloads", title: "Inferences API" },
+  { url: `${BASE}/api/2.24/workloads/distributed`, category: "api", subcategory: "workloads", title: "Distributed Workloads API" },
+  { url: `${BASE}/api/2.24/workloads/distributed-inferences`, category: "api", subcategory: "workloads", title: "Distributed Inferences API" },
+  { url: `${BASE}/api/2.24/workloads/pods`, category: "api", subcategory: "workloads", title: "Pods API" },
+  { url: `${BASE}/api/2.24/workloads/nvidia-nim`, category: "api", subcategory: "workloads", title: "NVIDIA NIM API" },
+  { url: `${BASE}/api/2.24/workloads/workload-templates`, category: "api", subcategory: "workloads", title: "Workload Templates API" },
+  { url: `${BASE}/api/2.24/workload-assets/compute`, category: "api", subcategory: "workload-assets", title: "Compute Assets API" },
+  { url: `${BASE}/api/2.24/workload-assets/credentials`, category: "api", subcategory: "workload-assets", title: "Credentials Assets API" },
+  { url: `${BASE}/api/2.24/workload-assets/datasources`, category: "api", subcategory: "workload-assets", title: "Datasources Assets API" },
+  { url: `${BASE}/api/2.24/workload-assets/environment`, category: "api", subcategory: "workload-assets", title: "Environment Assets API" },
+  { url: `${BASE}/api/2.24/workload-assets/storage-class-configuration`, category: "api", subcategory: "workload-assets", title: "Storage Class Configuration API" },
+  { url: `${BASE}/api/2.24/datavolumes/datavolumes`, category: "api", subcategory: "workload-assets", title: "Data Volumes API" },
+  { url: `${BASE}/api/2.24/policies/policy`, category: "api", subcategory: "policies", title: "Policies API" },
+  { url: `${BASE}/api/2.24/notifications/notificationchannels`, category: "api", subcategory: "notifications", title: "Notification Channels API" },
+  { url: `${BASE}/api/2.24/api-guides/nim-observability-metrics-via-api`, category: "api", subcategory: "guides", title: "NIM Observability Metrics API Guide" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -281,4 +315,38 @@ export const ALL_PAGES: DocPage[] = [
   ...SCHEDULER_DOCS,
   ...CLI_REFERENCE,
   ...POLICIES_DOCS,
+];
+
+// ---------------------------------------------------------------------------
+// SaaS (unversioned)
+// ---------------------------------------------------------------------------
+export const SAAS_PAGES: DocPage[] = [
+  { url: `${BASE}/saas/getting-started/overview`, category: "getting-started", subcategory: "overview", title: "Overview" },
+  { url: `${BASE}/saas/getting-started/whats-new-for-nvidia-run-ai-saas`, category: "getting-started", subcategory: "whats-new", title: "What's New for SaaS" },
+  { url: `${BASE}/saas/getting-started/installation`, category: "getting-started", subcategory: "installation", title: "Installation" },
+  { url: `${BASE}/saas/support-policy/product-support-policy`, category: "support-policy", subcategory: "overview", title: "Product Support Policy" },
+  { url: `${BASE}/saas/support-policy/product-version-life-cycle`, category: "support-policy", subcategory: "versions", title: "Product Version Life Cycle" },
+  { url: `${BASE}/saas/reference/api`, category: "reference", subcategory: "api", title: "API Reference" },
+  { url: `${BASE}/saas/reference/api/rest-api`, category: "reference", subcategory: "api", title: "NVIDIA Run:ai REST API" },
+];
+
+// ---------------------------------------------------------------------------
+// Multi-tenant (versioned)
+// ---------------------------------------------------------------------------
+export const MULTI_TENANT_PAGES: DocPage[] = [
+  { url: `${BASE}/multi-tenant/${VERSION_TOKEN}/getting-started/overview`, category: "getting-started", subcategory: "overview", title: "Overview" },
+  { url: `${BASE}/multi-tenant/${VERSION_TOKEN}/getting-started/installation`, category: "getting-started", subcategory: "installation", title: "Installation" },
+  { url: `${BASE}/multi-tenant/${VERSION_TOKEN}/getting-started/api-access-setup`, category: "getting-started", subcategory: "api-access", title: "API Access Setup" },
+  { url: `${BASE}/multi-tenant/${VERSION_TOKEN}/support-policy/product-support-policy`, category: "support-policy", subcategory: "overview", title: "Product Support Policy" },
+  { url: `${BASE}/multi-tenant/${VERSION_TOKEN}/support-policy/product-version-life-cycle`, category: "support-policy", subcategory: "versions", title: "Product Version Life Cycle" },
+];
+
+// ---------------------------------------------------------------------------
+// Legacy docs (docs.run.ai) - versioned with v{VERSION}
+// ---------------------------------------------------------------------------
+export const LEGACY_PAGES: DocPage[] = [
+  { url: `https://docs.run.ai/v${VERSION_TOKEN}/home/documentation-library`, category: "home", subcategory: "overview", title: "Documentation Library" },
+  { url: `https://docs.run.ai/v${VERSION_TOKEN}/developer/admin-rest-api/overview/`, category: "developer", subcategory: "api", title: "Run:ai REST API Overview" },
+  { url: `https://docs.run.ai/v${VERSION_TOKEN}/developer/cluster-api/workload-overview-dev/`, category: "developer", subcategory: "cluster-api", title: "Cluster API (Deprecated)" },
+  { url: `https://docs.run.ai/v${VERSION_TOKEN}/Researcher/cli-reference/new-cli/overview/`, category: "researcher", subcategory: "cli", title: "CLI v2 Overview" },
 ];

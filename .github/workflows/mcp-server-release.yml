@@ -11,25 +11,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    defaults:
-      run:
-        working-directory: run-ai/mcp-server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: run-ai/mcp-server/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm run build
+      - run: npm run release:prepare
       - run: npm pack --json > pack.json
       - id: pack
         run: node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('pack.json','utf8'));console.log('file='+j[0].filename)" >> $GITHUB_OUTPUT
+      - run: tar -tzf "${{ steps.pack.outputs.file }}" | grep -q '^package/dist/data/runai-docs.db$'
       - uses: actions/upload-artifact@v4
         with:
           name: runai-mcp-server-package
-          path: run-ai/mcp-server/${{ steps.pack.outputs.file }}
+          path: ${{ steps.pack.outputs.file }}
       - uses: softprops/action-gh-release@v2
         with:
-          files: run-ai/mcp-server/${{ steps.pack.outputs.file }}
+          files: ${{ steps.pack.outputs.file }}

@@ -10,7 +10,10 @@ function initDb(dbPath) {
   const db = new Database(dbPath);
   db.exec(`
     CREATE TABLE IF NOT EXISTS pages (
-      url TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY,
+      docset TEXT NOT NULL,
+      version TEXT NOT NULL,
+      url TEXT NOT NULL,
       category TEXT NOT NULL,
       subcategory TEXT NOT NULL,
       title TEXT NOT NULL,
@@ -20,24 +23,24 @@ function initDb(dbPath) {
     );
 
     CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
-      title, content_plain, content='pages', content_rowid='rowid'
+      title, content_plain, content='pages', content_rowid='id'
     );
 
     CREATE TRIGGER IF NOT EXISTS pages_ai AFTER INSERT ON pages BEGIN
       INSERT INTO pages_fts(rowid, title, content_plain)
-      VALUES (new.rowid, new.title, new.content_plain);
+      VALUES (new.id, new.title, new.content_plain);
     END;
 
     CREATE TRIGGER IF NOT EXISTS pages_ad AFTER DELETE ON pages BEGIN
       INSERT INTO pages_fts(pages_fts, rowid, title, content_plain)
-      VALUES ('delete', old.rowid, old.title, old.content_plain);
+      VALUES ('delete', old.id, old.title, old.content_plain);
     END;
 
     CREATE TRIGGER IF NOT EXISTS pages_au AFTER UPDATE ON pages BEGIN
       INSERT INTO pages_fts(pages_fts, rowid, title, content_plain)
-      VALUES ('delete', old.rowid, old.title, old.content_plain);
+      VALUES ('delete', old.id, old.title, old.content_plain);
       INSERT INTO pages_fts(rowid, title, content_plain)
-      VALUES (new.rowid, new.title, new.content_plain);
+      VALUES (new.id, new.title, new.content_plain);
     END;
   `);
   return db;
@@ -51,11 +54,13 @@ test("DocsDatabase reads and searches", () => {
   const now = new Date().toISOString();
   const url = "https://run-ai-docs.nvidia.com/test/page";
   db.prepare(
-    "INSERT OR REPLACE INTO pages (url, category, subcategory, title, content_md, content_plain, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  ).run(url, "installation", "requirements", "Sample Page", "Hello **World**", "hello world", now);
+    "INSERT OR REPLACE INTO pages (docset, version, url, category, subcategory, title, content_md, content_plain, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run("self-hosted", "2.24", url, "installation", "requirements", "Sample Page", "Hello **World**", "hello world", now);
   db.prepare(
-    "INSERT OR REPLACE INTO pages (url, category, subcategory, title, content_md, content_plain, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    "INSERT OR REPLACE INTO pages (docset, version, url, category, subcategory, title, content_md, content_plain, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(
+    "self-hosted",
+    "2.24",
     "https://run-ai-docs.nvidia.com/test/another",
     "installation",
     "requirements",
@@ -71,27 +76,27 @@ test("DocsDatabase reads and searches", () => {
   assert.ok(page);
   assert.equal(page.title, "Sample Page");
 
-  const results = docs.search("hello", 10, 0);
+  const results = docs.search("hello", { limit: 10, offset: 0, docset: "self-hosted", version: "2.24" });
   assert.equal(results.length, 1);
   assert.equal(results[0].url, url);
 
-  const sections = docs.listCategories();
+  const sections = docs.listCategories({ docset: "self-hosted", version: "2.24" });
   assert.equal(sections.length, 1);
   assert.equal(sections[0].category, "installation");
   assert.equal(sections[0].subcategory, "requirements");
   assert.equal(sections[0].count, 2);
 
-  const total = docs.countByCategory("installation");
+  const total = docs.countByCategory("installation", undefined, { docset: "self-hosted", version: "2.24" });
   assert.equal(total, 2);
 
-  const paged = docs.listByCategory("installation", 1, 0);
+  const paged = docs.listByCategory("installation", { limit: 1, offset: 0, docset: "self-hosted", version: "2.24" });
   assert.equal(paged.length, 1);
 
-  const matches = docs.findPagesByTitle("Sample", 5);
+  const matches = docs.findPagesByTitle("Sample", 5, { docset: "self-hosted", version: "2.24" });
   assert.equal(matches.length, 1);
   assert.equal(matches[0].title, "Sample Page");
 
-  const stats = docs.getStats();
+  const stats = docs.getStats({ docset: "self-hosted", version: "2.24" });
   assert.equal(stats.pages, 2);
 
   docs.close();
