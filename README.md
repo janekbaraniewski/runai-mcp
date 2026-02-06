@@ -6,10 +6,13 @@ An MCP (Model Context Protocol) server that exposes NVIDIA Run:ai documentation 
 
 ## Install (npm registry)
 
-- Global install:
-  `npm install -g runai-mcp-server`
-- One-off run:
-  `npx -y runai-mcp-server`
+**Recommended:** Install globally for fast startup:
+
+```bash
+npm install -g runai-mcp-server
+```
+
+> ⚠️ **Why global install?** This package includes a documentation database. Using `npx` in your MCP config will re-download the package on every startup, causing slow initialization. Installing globally ensures instant startup.
 
 ## Install (from source)
 
@@ -52,21 +55,23 @@ An MCP (Model Context Protocol) server that exposes NVIDIA Run:ai documentation 
 
 ## MCP Client Setup
 
-### OpenAI Codex
+### OpenCode
 
-Add via CLI:
+Config locations:
+- Global: `~/.config/opencode/opencode.json`
+- Project: `opencode.json` in the repo root
 
-```bash
-codex mcp add runai-docs -- runai-mcp-server
-```
-
-Or edit `~/.codex/config.toml` (or project-scoped `.codex/config.toml`):
-
-```toml
-[mcp_servers.runai-docs]
-command = "runai-mcp-server"
-args = []
-# env = { RUNAI_DOCS_DB = "/absolute/path/to/runai-docs.db" }
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "runai-docs": {
+      "type": "local",
+      "command": ["runai-mcp-server"],
+      "enabled": true
+    }
+  }
+}
 ```
 
 ### Claude Desktop
@@ -77,39 +82,15 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "runai-docs": {
-      "command": "npx",
-      "args": ["-y", "runai-mcp-server"]
+      "command": "runai-mcp-server"
     }
   }
 }
 ```
 
-Common config locations:
-
+Config locations:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-### OpenCode
-
-Config file locations:
-
-- Global: `~/.config/opencode/opencode.json`
-- Project: `opencode.json` in the repo root
-
-Add to `opencode.json`:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "runai-docs": {
-      "type": "local",
-      "command": ["npx", "-y", "runai-mcp-server"],
-      "enabled": true
-    }
-  }
-}
-```
 
 ### Cursor
 
@@ -119,11 +100,24 @@ Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
 {
   "mcpServers": {
     "runai-docs": {
-      "command": "npx",
-      "args": ["-y", "runai-mcp-server"]
+      "command": "runai-mcp-server"
     }
   }
 }
 ```
 
-> **Note:** All examples use `npx -y runai-mcp-server` which auto-downloads the latest version. If you installed globally with `npm install -g runai-mcp-server`, you can use `"command": "runai-mcp-server"` directly instead.
+### OpenAI Codex
+
+Add via CLI:
+
+```bash
+codex mcp add runai-docs -- runai-mcp-server
+```
+
+Or edit `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.runai-docs]
+command = "runai-mcp-server"
+args = []
+```
