@@ -1,5 +1,7 @@
 # Run:ai MCP Server
 
+[![npm version](https://img.shields.io/npm/v/runai-mcp-server.svg)](https://www.npmjs.com/package/runai-mcp-server)
+
 An MCP (Model Context Protocol) server that exposes NVIDIA Run:ai documentation and API references across multiple versions and docsets (self-hosted, SaaS, multi-tenant, API, legacy).
 
 ## Install (npm registry)
@@ -34,7 +36,9 @@ An MCP (Model Context Protocol) server that exposes NVIDIA Run:ai documentation 
 
 ## Configuration
 
-- `RUNAI_DOCS_DB`: optional path to `runai-docs.db` if you want to override the default lookup.
+> **Note:** When installed via npm, the documentation database is bundled with the package. No configuration is required for basic usage.
+
+- `RUNAI_DOCS_DB`: optional path to a custom `runai-docs.db` (only needed if you want to use your own scraped database).
 - `RUNAI_DOCS_DOCSET`: default docset for tools that accept a docset (default: `self-hosted`).
 - `RUNAI_DOCS_VERSION`: default version for tools that accept a version (default: `latest`).
 - `RUNAI_DOCS_LATEST_VERSION`: fallback numeric version when `latest` cannot be resolved (default: `2.24`).
@@ -73,12 +77,8 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "runai-docs": {
-      "type": "stdio",
-      "command": "runai-mcp-server",
-      "args": [],
-      "env": {
-        "RUNAI_DOCS_DB": "/absolute/path/to/runai-docs.db"
-      }
+      "command": "npx",
+      "args": ["-y", "runai-mcp-server"]
     }
   }
 }
@@ -104,11 +104,8 @@ Add to `opencode.json`:
   "mcp": {
     "runai-docs": {
       "type": "local",
-      "command": ["runai-mcp-server"],
-      "enabled": true,
-      "environment": {
-        "RUNAI_DOCS_DB": "/absolute/path/to/runai-docs.db"
-      }
+      "command": ["npx", "-y", "runai-mcp-server"],
+      "enabled": true
     }
   }
 }
@@ -122,13 +119,11 @@ Create or edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
 {
   "mcpServers": {
     "runai-docs": {
-      "type": "stdio",
-      "command": "runai-mcp-server",
-      "args": [],
-      "env": {
-        "RUNAI_DOCS_DB": "/absolute/path/to/runai-docs.db"
-      }
+      "command": "npx",
+      "args": ["-y", "runai-mcp-server"]
     }
   }
 }
 ```
+
+> **Note:** All examples use `npx -y runai-mcp-server` which auto-downloads the latest version. If you installed globally with `npm install -g runai-mcp-server`, you can use `"command": "runai-mcp-server"` directly instead.
