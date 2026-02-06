@@ -20,6 +20,8 @@ pnpm-debug.log*
 # Scraped/derived data (do not commit)
 src/data/runai-docs.db
 src/data/docs/
+src/data/helm-reference.md
+src/data/runai-api-v2.24-management-spec.md
 
 # Generated kubeconfigs or tf vars (if any appear here)
 *-kubeconfig.yaml
