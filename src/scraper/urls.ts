@@ -320,6 +320,15 @@ export const SAAS_PAGES: DocPage[] = [
   { url: `${BASE}/saas/getting-started/installation`, category: "getting-started", subcategory: "installation", title: "Installation" },
   { url: `${BASE}/saas/support-policy/product-support-policy`, category: "support-policy", subcategory: "overview", title: "Product Support Policy" },
   { url: `${BASE}/saas/support-policy/product-version-life-cycle`, category: "support-policy", subcategory: "versions", title: "Product Version Life Cycle" },
+
+  // CLI Reference
+  { url: `${BASE}/saas/reference/cli`, category: "reference", subcategory: "cli", title: "CLI Reference" },
+  { url: `${BASE}/saas/reference/cli/install-cli`, category: "reference", subcategory: "cli", title: "Install CLI" },
+  { url: `${BASE}/saas/reference/cli/runai`, category: "reference", subcategory: "cli", title: "runai CLI Overview" },
+  { url: `${BASE}/saas/reference/cli/cli-examples`, category: "reference", subcategory: "cli", title: "CLI Examples" },
+  { url: `${BASE}/saas/reference/cli/administrator-cli`, category: "reference", subcategory: "cli", title: "Administrator CLI" },
+  { url: `${BASE}/saas/reference/cli/set-kubeconfig-parameters`, category: "reference", subcategory: "cli", title: "Set Kubeconfig Parameters" },
+  { url: `${BASE}/saas/reference/cli/auto-update-cli-mechanism`, category: "reference", subcategory: "cli", title: "Auto-Update CLI Mechanism" },
 ];
 
 // ---------------------------------------------------------------------------
